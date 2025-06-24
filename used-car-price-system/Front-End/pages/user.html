@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二手车价格系统 - 用户管理</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <!-- 引入Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <!-- 引入字体图标 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+</head>
+<body>
+    <div id="navbar">
+        <site-navbar></site-navbar>
+    </div>
+
+    <div id="app" class="content-container container">
+        <h1><i class="bi bi-people"></i> 用户管理</h1>
+        
+        <div class="user-management-container">
+            <!-- 用户管理工具栏 -->
+            <div class="user-toolbar card">
+                <div class="toolbar-left">
+                    <div class="search-input-group">
+                        <i class="bi bi-search search-icon"></i>
+                        <input 
+                            type="text" 
+                            v-model="searchQuery" 
+                            placeholder="搜索用户名或角色" 
+                            @input="searchUsers"
+                        >
+                    </div>
+                </div>
+                
+                <div class="toolbar-right">
+                    <div class="filter-group">
+                        <label>角色筛选：</label>
+                        <select v-model="roleFilter" @change="filterUsers">
+                            <option value="">全部角色</option>
+                            <option value="admin">管理员</option>
+                            <option value="seller">卖家</option>
+                            <option value="buyer">买家</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn" @click="showAddUserModal = true">
+                        <i class="bi bi-plus-lg"></i> 添加用户
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 用户列表 -->
+            <div class="card">
+                <div class="user-table-container">
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th class="checkbox-cell">
+                                    <input type="checkbox" id="select-all" v-model="selectAll" @change="toggleSelectAll">
+                                </th>
+                                <th @click="sortBy('id')" class="sortable">
+                                    ID <i class="bi" :class="getSortIcon('id')"></i>
+                                </th>
+                                <th @click="sortBy('name')" class="sortable">
+                                    用户名 <i class="bi" :class="getSortIcon('name')"></i>
+                                </th>
+                                <th @click="sortBy('role')" class="sortable">
+                                    角色 <i class="bi" :class="getSortIcon('role')"></i>
+                                </th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="user in paginatedUsers" :key="user.id" :class="{ selected: selectedUsers.includes(user.id) }">
+                                <td class="checkbox-cell">
+                                    <input type="checkbox" :value="user.id" v-model="selectedUsers">
+                                </td>
+                                <td>{{ user.id }}</td>
+                                <td>{{ user.name }}</td>
+                                <td>
+                                    <span class="role-badge" :class="getRoleBadgeClass(user.role)">
+                                        {{ getRoleDisplayName(user.role) }}
+                                    </span>
+                                </td>
+                                <td class="action-cell">
+                                    <button class="btn-icon" title="编辑" @click="editUser(user)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn-icon" title="删除" @click="confirmDeleteUser(user)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="filteredUsers.length === 0">
+                                <td colspan="5" class="no-data">没有找到符合条件的用户</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 批量操作工具栏 -->
+                <div class="bulk-actions" v-show="selectedUsers.length > 0">
+                    <div class="selection-info">
+                        已选择 <strong>{{ selectedUsers.length }}</strong> 个用户
+                    </div>
+                    <div class="bulk-action-buttons">
+                        <button class="btn-sm btn-danger" @click="confirmBulkDelete">
+                            <i class="bi bi-trash"></i> 批量删除
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 分页控件 -->
+                <div class="pagination" v-if="totalPages > 1">
+                    <button 
+                        class="pagination-btn" 
+                        :class="{disabled: currentPage === 1}"
+                        @click="changePage(currentPage - 1)" 
+                        :disabled="currentPage === 1"
+                    >
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    
+                    <button 
+                        v-for="page in displayedPages" 
+                        :key="page" 
+                        class="pagination-btn" 
+                        :class="{active: currentPage === page}"
+                        @click="changePage(page)"
+                    >
+                        {{ page }}
+                    </button>
+                    
+                    <button 
+                        class="pagination-btn" 
+                        :class="{disabled: currentPage === totalPages}"
+                        @click="changePage(currentPage + 1)" 
+                        :disabled="currentPage === totalPages"
+                    >
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加用户对话框 -->
+        <div class="modal" v-if="showAddUserModal">
+            <div class="modal-backdrop" @click="showAddUserModal = false"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>{{ isEditing ? '编辑用户' : '添加用户' }}</h3>
+                    <button class="btn-icon" @click="showAddUserModal = false">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="saveUser">
+                        <div class="form-group">
+                            <label for="username">用户名</label>
+                            <input 
+                                type="text" 
+                                id="username" 
+                                v-model="newUser.name" 
+                                required
+                                :disabled="isEditing"
+                            >
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="password">密码{{ isEditing ? '（留空表示不修改）' : '' }}</label>
+                            <input 
+                                type="password" 
+                                id="password" 
+                                v-model="newUser.password" 
+                                :required="!isEditing"
+                                placeholder="输入密码"
+                            >
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="role">用户角色</label>
+                            <select id="role" v-model="newUser.role" required>
+                                <option value="admin">管理员</option>
+                                <option value="seller">卖家</option>
+                                <option value="buyer">买家</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn-outline" @click="showAddUserModal = false">取消</button>
+                            <button type="submit" class="btn">保存</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 删除确认对话框 -->
+        <div class="modal" v-if="showDeleteModal">
+            <div class="modal-backdrop" @click="showDeleteModal = false"></div>
+            <div class="modal-content modal-sm">
+                <div class="modal-header">
+                    <h3>确认删除</h3>
+                    <button class="btn-icon" @click="showDeleteModal = false">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p v-if="!isBulkDeleting">
+                        确定要删除用户 <strong>{{ userToDelete?.name }}</strong> 吗？此操作不可撤销。
+                    </p>
+                    <p v-else>
+                        确定要删除选中的 <strong>{{ selectedUsers.length }}</strong> 个用户吗？此操作不可撤销。
+                    </p>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn-outline" @click="showDeleteModal = false">取消</button>
+                        <button type="button" class="btn btn-danger" @click="confirmDelete">删除</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="../js/main.js"></script>
+    <script src="../js/user-api.js"></script>
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                users: [],
+                filteredUsers: [],
+                searchQuery: '',
+                roleFilter: '',
+                currentPage: 1,
+                itemsPerPage: 10,
+                selectedUsers: [],
+                selectAll: false,
+                showAddUserModal: false,
+                showDeleteModal: false,
+                isEditing: false,
+                isBulkDeleting: false,
+                userToDelete: null,
+                newUser: {
+                    name: '',
+                    password: '',
+                    role: 'buyer'
+                },
+                sortKey: 'id',
+                sortOrder: 'asc',
+                isLoading: false,
+                errorMessage: ''
+            },
+            computed: {
+                totalPages() {
+                    return Math.ceil(this.filteredUsers.length / this.itemsPerPage);
+                },
+                paginatedUsers() {
+                    const start = (this.currentPage - 1) * this.itemsPerPage;
+                    const end = start + this.itemsPerPage;
+                    return this.filteredUsers.slice(start, end);
+                },
+                displayedPages() {
+                    const pages = [];
+                    const maxPages = 5; // 最多显示5个页码
+                    
+                    // 计算显示的页码范围
+                    let startPage = Math.max(1, this.currentPage - Math.floor(maxPages / 2));
+                    let endPage = startPage + maxPages - 1;
+                    
+                    // 调整范围以确保不超出总页数
+                    if (endPage > this.totalPages) {
+                        endPage = this.totalPages;
+                        startPage = Math.max(1, endPage - maxPages + 1);
+                    }
+                    
+                    // 生成页码列表
+                    for (let i = startPage; i <= endPage; i++) {
+                        pages.push(i);
+                    }
+                    
+                    return pages;
+                }
+            },
+            created() {
+                // 初始化加载用户数据
+                this.loadUsers();
+            },
+            methods: {
+                // 加载用户数据
+                async loadUsers() {
+                    this.isLoading = true;
+                    try {
+                        const result = await UserAPI.getUsers();
+                        this.users = result.users.map(user => ({
+                            ...user,
+                            role: UserAPI.convertCodeToRole(user.role)
+                        }));
+                        this.filterUsers();
+                    } catch (error) {
+                        console.error('加载用户数据失败:', error);
+                        this.errorMessage = '加载用户数据失败: ' + error.message;
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                
+                // 搜索用户
+                searchUsers() {
+                    this.filterUsers();
+                },
+                
+                // 筛选用户
+                filterUsers() {
+                    let filtered = [...this.users];
+                    
+                    // 按搜索条件过滤
+                    if (this.searchQuery) {
+                        const query = this.searchQuery.toLowerCase();
+                        filtered = filtered.filter(user => 
+                            user.name.toLowerCase().includes(query)
+                        );
+                    }
+                    
+                    // 按角色过滤
+                    if (this.roleFilter) {
+                        filtered = filtered.filter(user => user.role === this.roleFilter);
+                    }
+                    
+                    this.filteredUsers = filtered;
+                    
+                    // 排序
+                    this.sortUsers();
+                    
+                    // 重置分页
+                    this.currentPage = 1;
+                    this.selectedUsers = [];
+                    this.selectAll = false;
+                },
+                
+                // 排序用户列表
+                sortBy(key) {
+                    if (this.sortKey === key) {
+                        this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortKey = key;
+                        this.sortOrder = 'asc';
+                    }
+                    
+                    this.sortUsers();
+                },
+                
+                // 执行排序
+                sortUsers() {
+                    const key = this.sortKey;
+                    const order = this.sortOrder === 'asc' ? 1 : -1;
+                    
+                    this.filteredUsers.sort((a, b) => {
+                        const valueA = a[key];
+                        const valueB = b[key];
+                        
+                        if (valueA < valueB) return -1 * order;
+                        if (valueA > valueB) return 1 * order;
+                        return 0;
+                    });
+                },
+                
+                // 获取排序图标
+                getSortIcon(key) {
+                    if (this.sortKey !== key) return 'bi-chevron-expand';
+                    return this.sortOrder === 'asc' ? 'bi-chevron-up' : 'bi-chevron-down';
+                },
+                
+                // 切换全选
+                toggleSelectAll() {
+                    if (this.selectAll) {
+                        this.selectedUsers = this.paginatedUsers.map(user => user.id);
+                    } else {
+                        this.selectedUsers = [];
+                    }
+                },
+                
+                // 修改页码
+                changePage(page) {
+                    if (page < 1 || page > this.totalPages) return;
+                    this.currentPage = page;
+                    this.selectAll = false;
+                    this.selectedUsers = [];
+                },
+                
+                // 编辑用户
+                editUser(user) {
+                    this.isEditing = true;
+                    this.newUser = {
+                        id: user.id,
+                        name: user.name,
+                        password: '', // 不显示密码
+                        role: user.role
+                    };
+                    this.showAddUserModal = true;
+                },
+                
+                // 确认删除用户
+                confirmDeleteUser(user) {
+                    this.userToDelete = user;
+                    this.isBulkDeleting = false;
+                    this.showDeleteModal = true;
+                },
+                
+                // 确认批量删除
+                confirmBulkDelete() {
+                    this.isBulkDeleting = true;
+                    this.showDeleteModal = true;
+                },
+                
+                // 执行删除
+                async confirmDelete() {
+                    this.isLoading = true;
+                    try {
+                        if (this.isBulkDeleting) {
+                            // 批量删除
+                            const promises = this.selectedUsers.map(userId => 
+                                UserAPI.deleteUser(userId)
+                            );
+                            await Promise.all(promises);
+                            
+                            this.selectedUsers = [];
+                            this.selectAll = false;
+                        } else {
+                            // 单个删除
+                            await UserAPI.deleteUser(this.userToDelete.id);
+                        }
+                        
+                        // 重新加载用户列表
+                        await this.loadUsers();
+                        this.showDeleteModal = false;
+                    } catch (error) {
+                        console.error('删除用户失败:', error);
+                        alert('删除用户失败: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                
+                // 保存用户信息
+                async saveUser() {
+                    this.isLoading = true;
+                    try {
+                        if (this.isEditing) {
+                            // 更新用户
+                            const userData = { ...this.newUser };
+                            if (!userData.password) {
+                                delete userData.password; // 如果密码为空，不更新密码
+                            }
+                            
+                            await UserAPI.updateUser(userData.id, userData);
+                        } else {
+                            // 创建新用户
+                            await UserAPI.createUser(this.newUser);
+                        }
+                        
+                        // 重新加载用户列表
+                        await this.loadUsers();
+                        this.showAddUserModal = false;
+                        this.resetForm();
+                    } catch (error) {
+                        console.error('保存用户失败:', error);
+                        alert('保存用户失败: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                
+                // 重置表单
+                resetForm() {
+                    this.newUser = {
+                        name: '',
+                        password: '',
+                        role: 'buyer'
+                    };
+                    this.isEditing = false;
+                },
+                
+                // 获取角色显示名称
+                getRoleDisplayName(role) {
+                    switch (role) {
+                        case 'admin': return '管理员';
+                        case 'buyer': return '买家';
+                        case 'seller': return '卖家';
+                        default: return '未知';
+                    }
+                },
+                
+                // 获取角色徽章类名
+                getRoleBadgeClass(role) {
+                    switch (role) {
+                        case 'admin': return 'role-admin';
+                        case 'buyer': return 'role-buyer';
+                        case 'seller': return 'role-seller';
+                        default: return '';
+                    }
+                }
+            }
+        });
+    </script>
+    
+    <style>
+        .user-management-container {
+            margin-top: var(--spacing-lg);
+        }
+        
+        /* 工具栏 */
+        .user-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding: var(--spacing-md);
+        }
+        
+        .toolbar-left, .toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+        
+        .search-input-group {
+            position: relative;
+            min-width: 300px;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: var(--spacing-md);
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-light);
+        }
+        
+        .search-input-group input {
+            padding-left: calc(var(--spacing-md) * 2 + 16px);
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .filter-group label {
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+        
+        .filter-group select {
+            width: auto;
+        }
+        
+        /* 用户表格 */
+        .user-table-container {
+            overflow-x: auto;
+        }
+        
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .user-table th,
+        .user-table td {
+            padding: var(--spacing-sm) var(--spacing-md);
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .user-table th {
+            font-weight: 500;
+            background-color: var(--background-color);
+        }
+        
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .sortable:hover {
+            background-color: var(--border-color-light);
+        }
+        
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+        
+        .action-cell {
+            white-space: nowrap;
+            width: 120px;
+        }
+        
+        .user-table tr:hover {
+            background-color: var(--border-color-light);
+        }
+        
+        .user-table tr.selected {
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: var(--spacing-lg) !important;
+            color: var(--text-light);
+        }
+        
+        /* 角色和状态标签 */
+        .role-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .role-admin {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--primary-color);
+        }
+        
+        .role-seller {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+        
+        .role-buyer {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+        
+        /* 批量操作工具栏 */
+        .bulk-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            background-color: rgba(59, 130, 246, 0.05);
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .bulk-action-buttons {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        
+        /* 模态对话框 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+        
+        .modal-content {
+            position: relative;
+            width: 90%;
+            max-width: 500px;
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            z-index: 1;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-sm {
+            max-width: 400px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .modal-body {
+            padding: var(--spacing-md);
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .user-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: var(--spacing-md);
+            }
+            
+            .toolbar-left, .toolbar-right {
+                width: 100%;
+            }
+            
+            .search-input-group {
+                width: 100%;
+                min-width: auto;
+            }
+            
+            .filter-group {
+                flex: 1;
+            }
+            
+            .filter-group select {
+                width: 100%;
+            }
+        }
+    </style>
+</body>
+</html> 

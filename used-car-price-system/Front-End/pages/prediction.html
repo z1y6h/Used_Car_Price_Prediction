@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二手车价格系统 - 价格预测</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <!-- 引入Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
+    <!-- 引入字体图标 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+</head>
+<body>
+    <div id="navbar">
+        <site-navbar></site-navbar>
+    </div>
+
+    <div id="app" class="content-container container">
+        <h1><i class="bi bi-calculator"></i> 价格预测</h1>
+        
+        <div class="prediction-container">
+            <!-- 车辆信息填写表单 -->
+            <section class="card prediction-form-section">
+                <div class="card-header">
+                    <h2><i class="bi bi-pencil-square"></i> 车辆信息</h2>
+                    <div class="form-status" v-if="predicting">
+                        <div class="spinner"></div>
+                        <span>预测中...</span>
+                    </div>
+                </div>
+                
+                <form @submit.prevent="predictPrice" class="car-info-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="make"><i class="bi bi-tag"></i> 品牌</label>
+                            <select id="make" v-model="carData.make" required @change="handleMakeChange">
+                                <option value="" disabled>请选择品牌</option>
+                                <option v-for="brand in availableBrands" :key="brand" :value="brand">{{ brand }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="model"><i class="bi bi-box"></i> 型号</label>
+                            <select id="model" v-model="carData.model" required>
+                                <option value="" disabled>请选择型号</option>
+                                <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="year"><i class="bi bi-calendar"></i> 生产年份</label>
+                            <input type="number" id="year" v-model.number="carData.year" placeholder="请输入年份" min="2000" :max="currentYear" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="mileage"><i class="bi bi-speedometer2"></i> 里程 (km)</label>
+                            <input type="number" id="mileage" v-model.number="carData.mileage" placeholder="请输入里程数" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="body"><i class="bi bi-car-front"></i> 车型</label>
+                            <select id="body" v-model="carData.body_type" required>
+                                <option value="" disabled>请选择车型</option>
+                                <option v-for="body in availableBodyTypes" :key="body" :value="body">{{ body }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="transmission"><i class="bi bi-gear"></i> 变速箱</label>
+                            <select id="transmission" v-model="carData.transmission" required>
+                                <option value="" disabled>请选择变速箱类型</option>
+                                <option v-for="trans in availableTransmissions" :key="trans" :value="trans">{{ trans }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="fuel_type"><i class="bi bi-fuel-pump"></i> 燃油类型</label>
+                            <select id="fuel_type" v-model="carData.fuel_type" required>
+                                <option value="" disabled>请选择燃油类型</option>
+                                <option v-for="fuel in availableFuelTypes" :key="fuel" :value="fuel">{{ fuel }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="color"><i class="bi bi-palette"></i> 颜色</label>
+                            <select id="color" v-model="carData.color">
+                                <option value="" disabled>请选择颜色</option>
+                                <option v-for="color in availableColors" :key="color" :value="color">{{ color }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cylinders"><i class="bi bi-circle-square"></i> 气缸数</label>
+                            <select id="cylinders" v-model.number="carData.cylinders">
+                                <option value="3">3</option>
+                                <option value="4" selected>4</option>
+                                <option value="6">6</option>
+                                <option value="8">8</option>
+                                <option value="12">12</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline" @click="resetForm">
+                            <i class="bi bi-arrow-counterclockwise"></i> 重置
+                        </button>
+                        <button type="submit" class="btn" :disabled="predicting">
+                            <i class="bi bi-lightning-charge"></i> {{ predicting ? '预测中...' : '开始预测' }}
+                        </button>
+                    </div>
+                </form>
+            </section>
+            
+            <!-- 预测结果区域 -->
+            <div class="prediction-results-container" v-if="predictionResult">
+                <!-- 预测结果卡片 -->
+                <section class="card prediction-result-card">
+                    <div class="card-header">
+                        <h2><i class="bi bi-cash-coin"></i> 预测结果</h2>
+                    </div>
+                    
+                    <div class="predicted-price">
+                        <div class="price-value">¥{{ predictionResult.price.toLocaleString() }}</div>
+                        <div class="price-range">预测区间: ¥{{ predictionResult.priceRange.low.toLocaleString() }} - ¥{{ predictionResult.priceRange.high.toLocaleString() }}</div>
+                        
+                        <div class="confidence-container">
+                            <div class="confidence-label">置信度: {{ predictionResult.confidence }}%</div>
+                            <div class="confidence-bar">
+                                <div class="confidence-value" :style="{width: predictionResult.confidence + '%'}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="factors-container">
+                        <h3><i class="bi bi-bar-chart-line"></i> 影响因素</h3>
+                        <ul class="factors-list">
+                            <li v-for="(factor, index) in predictionResult.factors" :key="index">
+                                <span class="factor-name">{{ factor.name }}</span>
+                                <div class="factor-bar-container">
+                                    <div class="factor-bar" :class="{positive: factor.impact.indexOf('-') === -1}" :style="{width: Math.min(Math.abs(parseFloat(factor.impact)), 100) + '%'}"></div>
+                                </div>
+                                <span class="factor-impact" :class="{positive: factor.impact.indexOf('-') === -1}">{{ factor.impact }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+                
+                <!-- 价格趋势图表 -->
+                <section class="card">
+                    <div class="card-header">
+                        <h2><i class="bi bi-graph-up-arrow"></i> 价格趋势</h2>
+                    </div>
+                    <div id="price-trend-chart" class="prediction-chart"></div>
+                </section>
+                
+                <!-- 年份价格比较表格 -->
+                <section class="card">
+                    <div class="card-header">
+                        <h2><i class="bi bi-table"></i> 年份价格比较</h2>
+                    </div>
+                    <div class="table-container">
+                        <table class="price-comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>年份</th>
+                                    <th>预估价格</th>
+                                    <th>价格变化</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(item, index) in priceComparisonData" :key="index" :class="{highlight: index === 4}">
+                                    <td>{{ item.year }}年</td>
+                                    <td>¥{{ item.price.toLocaleString() }}</td>
+                                    <td>
+                                        <span v-if="index === 4" class="current-year">当前估值</span>
+                                        <span v-else-if="index < 4" class="price-change decreased">
+                                            <i class="bi bi-arrow-down"></i> {{ ((item.price - priceComparisonData[4].price) / priceComparisonData[4].price * 100).toFixed(1) }}%
+                                        </span>
+                                        <span v-else class="price-change increased">
+                                            <i class="bi bi-arrow-up"></i> {{ ((item.price - priceComparisonData[4].price) / priceComparisonData[4].price * 100).toFixed(1) }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- 同型号车辆信息 -->
+                <section class="card similar-models-section" v-if="similarModelsData">
+                    <div class="card-header">
+                        <h2><i class="bi bi-car-front-fill"></i> 同型号车辆信息</h2>
+                    </div>
+                    
+                    <div v-if="similarModelsData.similar_cars && similarModelsData.similar_cars.length > 0">
+                        <div class="similar-models-stats">
+                            <div class="stats-item">
+                                <div class="stats-label">市场均价</div>
+                                <div class="stats-value">¥{{ similarModelsData.stats.avg_price.toLocaleString() }}</div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-label">价格区间</div>
+                                <div class="stats-value">
+                                    ¥{{ similarModelsData.stats.min_price.toLocaleString() }} - 
+                                    ¥{{ similarModelsData.stats.max_price.toLocaleString() }}
+                                </div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-label">数据量</div>
+                                <div class="stats-value">{{ similarModelsData.stats.count }}辆</div>
+                            </div>
+                        </div>
+                        
+                        <div class="similar-models-by-year" v-if="similarModelsData.price_by_year && similarModelsData.price_by_year.length > 0">
+                            <h3><i class="bi bi-bar-chart-line"></i> 各年份价格分布</h3>
+                            <div class="year-price-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>年份</th>
+                                            <th>平均价格</th>
+                                            <th>价格区间</th>
+                                            <th>数量</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="yearData in similarModelsData.price_by_year" :key="yearData.year">
+                                            <td>{{ yearData.year }}年</td>
+                                            <td>¥{{ Math.round(yearData.avg_price).toLocaleString() }}</td>
+                                            <td>
+                                                ¥{{ yearData.min_price.toLocaleString() }} - 
+                                                ¥{{ yearData.max_price.toLocaleString() }}
+                                            </td>
+                                            <td>{{ yearData.count }}辆</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="similar-models-list">
+                            <h3><i class="bi bi-list-ul"></i> 在售同型号车辆</h3>
+                            
+                            <!-- 搜索结果列表 -->
+                            <div class="results-list">
+                                <div class="car-card card" v-for="car in paginatedSimilarCars" :key="car.id">
+                                    <div class="car-info">
+                                        <h3 class="car-title">{{ car.Make }} {{ car.Model }}</h3>
+                                        <div class="car-meta">
+                                            <span><i class="bi bi-calendar"></i> {{ car.Year }}年</span>
+                                            <span><i class="bi bi-speedometer2"></i> {{ car.Mileage.toLocaleString() }}km</span>
+                                            <span><i class="bi bi-car-front"></i> {{ car.Body_Type }}</span>
+                                            <span><i class="bi bi-circle-square"></i> {{ car.Cylinders }}缸</span>
+                                            <span><i class="bi bi-gear"></i> {{ car.Transmission }}</span>
+                                            <span><i class="bi bi-fuel-pump"></i> {{ car.Fuel_Type }}</span>
+                                            <span><i class="bi bi-geo-alt"></i> {{ car.Location }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="car-price">
+                                        <div class="price-value">¥{{ car.Price.toLocaleString() }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 分页控件 -->
+                            <div class="pagination" v-if="totalSimilarPages > 1">
+                                <button 
+                                    class="pagination-btn" 
+                                    :class="{disabled: currentSimilarPage === 1}"
+                                    @click="changeSimilarPage(currentSimilarPage - 1)" 
+                                    :disabled="currentSimilarPage === 1"
+                                >
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                
+                                <button 
+                                    v-for="page in displayedSimilarPages" 
+                                    :key="page" 
+                                    class="pagination-btn" 
+                                    :class="{active: currentSimilarPage === page}"
+                                    @click="changeSimilarPage(page)"
+                                >
+                                    {{ page }}
+                                </button>
+                                
+                                <button 
+                                    class="pagination-btn" 
+                                    :class="{disabled: currentSimilarPage === totalSimilarPages}"
+                                    @click="changeSimilarPage(currentSimilarPage + 1)" 
+                                    :disabled="currentSimilarPage === totalSimilarPages"
+                                >
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-else class="no-data-message">
+                        <i class="bi bi-exclamation-circle"></i>
+                        <p>抱歉，没有找到同型号的车辆数据。这可能是因为该车型比较稀有或者是新款车型。</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+    
+    <script src="../js/main.js"></script>
+    <script src="../js/prediction.js"></script>
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                currentYear: new Date().getFullYear(),
+                carData: {
+                    make: '',
+                    model: '',
+                    year: new Date().getFullYear() - 2,
+                    mileage: 30000,
+                    body_type: '',
+                    transmission: '',
+                    fuel_type: '',
+                    color: '',
+                    cylinders: 4
+                },
+                availableBrands: [],
+                availableModels: [],
+                availableBodyTypes: [],
+                availableTransmissions: [],
+                availableFuelTypes: [],
+                availableColors: [],
+                predicting: false,
+                predictionResult: null,
+                priceComparisonData: [],
+                trendChartInstance: null,
+                isLoading: true,
+                similarModelsData: null,
+                currentSimilarPage: 1,
+                totalSimilarPages: 1,
+                displayedSimilarPages: [],
+                paginatedSimilarCars: []
+            },
+            async created() {
+                // 显示加载状态
+                this.isLoading = true;
+                
+                try {
+                    // 初始化可选项数据 - 从API获取
+                    const options = await prediction.loadAllOptions();
+                    this.availableBrands = options.makes;
+                    this.availableBodyTypes = options.bodyTypes;
+                    this.availableTransmissions = options.transmissions;
+                    this.availableFuelTypes = options.fuelTypes;
+                    this.availableColors = options.colors;
+                } catch (error) {
+                    console.error('初始化预测选项失败:', error);
+                    alert('获取车辆数据失败，请检查后端服务是否正常运行。');
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            methods: {
+                // 品牌变更时，获取对应型号列表
+                async handleMakeChange() {
+                    // 清空当前型号选择
+                    this.carData.model = '';
+                    this.availableModels = [];
+                    
+                    if (!this.carData.make) return;
+                    
+                    try {
+                        // 获取该品牌下的所有型号
+                        this.availableModels = await prediction.getModelsByMake(this.carData.make);
+                    } catch (error) {
+                        console.error('获取型号列表失败:', error);
+                    }
+                },
+                
+                async predictPrice() {
+                    if (this.predicting) return;
+                    this.predicting = true;
+                    
+                    try {
+                        // 调用预测API
+                        this.predictionResult = await prediction.predictPrice(this.carData);
+                        
+                        // 生成价格比较数据
+                        this.priceComparisonData = prediction.generatePriceComparisonData(this.predictionResult.price);
+                        
+                        // 生成价格趋势图表
+                        this.$nextTick(() => {
+                            this.generateTrendChart();
+                        });
+                        
+                        // 获取同型号车辆信息
+                        if (this.carData.make && this.carData.model) {
+                            this.similarModelsData = await prediction.getSimilarModels(this.carData.make, this.carData.model);
+                            if (this.similarModelsData && this.similarModelsData.similar_cars) {
+                                this.currentSimilarPage = 1;
+                                this.totalSimilarPages = Math.ceil(this.similarModelsData.similar_cars.length / 10);
+                                this.updateDisplayedSimilarPages();
+                                this.loadSimilarCars();
+                            }
+                        }
+                    } catch (error) {
+                        console.error('价格预测失败:', error);
+                        alert('价格预测失败: ' + error.message);
+                    } finally {
+                        this.predicting = false;
+                    }
+                },
+                resetForm() {
+                    this.carData = {
+                        make: '',
+                        model: '',
+                        year: new Date().getFullYear() - 2,
+                        mileage: 30000,
+                        body_type: '',
+                        transmission: '',
+                        fuel_type: '',
+                        color: '',
+                        location: '',
+                        cylinders: 4
+                    };
+                    this.predictionResult = null;
+                    this.similarModelsData = null;
+                    this.availableModels = [];
+                },
+                generateTrendChart() {
+                    // 生成历史价格趋势数据
+                    const trendData = prediction.generateHistoricalTrend(this.predictionResult.price);
+                    
+                    // 如果已有实例，则销毁
+                    if (this.trendChartInstance) {
+                        this.trendChartInstance.dispose();
+                    }
+                    
+                    // 创建价格趋势图表
+                    const chartDom = document.getElementById('price-trend-chart');
+                    this.trendChartInstance = echarts.init(chartDom);
+                    
+                    const option = {
+                        tooltip: {
+                            trigger: 'axis',
+                            formatter: '{b}: ¥{c}'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: trendData.months,
+                            boundaryGap: false
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '价格 (元)',
+                            axisLabel: {
+                                formatter: '¥{value}'
+                            }
+                        },
+                        series: [{
+                            name: '价格趋势',
+                            type: 'line',
+                            data: trendData.prices,
+                            smooth: true,
+                            lineStyle: {
+                                width: 3,
+                                color: 'var(--primary-color)'
+                            },
+                            itemStyle: {
+                                color: 'var(--primary-color)'
+                            },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: 'rgba(59, 130, 246, 0.5)' },
+                                    { offset: 1, color: 'rgba(59, 130, 246, 0.1)' }
+                                ])
+                            }
+                        }]
+                    };
+                    
+                    this.trendChartInstance.setOption(option);
+                    
+                    // 窗口大小变化时，重置图表大小
+                    window.addEventListener('resize', () => {
+                        if (this.trendChartInstance) {
+                            this.trendChartInstance.resize();
+                        }
+                    });
+                },
+                changeSimilarPage(page) {
+                    this.currentSimilarPage = page;
+                    this.loadSimilarCars();
+                },
+                loadSimilarCars() {
+                    if (this.similarModelsData && this.similarModelsData.similar_cars) {
+                        const cars = this.similarModelsData.similar_cars;
+                        const pageSize = 10; // 每页显示的车辆数量
+                        // 分页处理
+                        const startIndex = (this.currentSimilarPage - 1) * pageSize;
+                        const endIndex = Math.min(startIndex + pageSize, cars.length);
+                        this.paginatedSimilarCars = cars.slice(startIndex, endIndex);
+                    }
+                },
+                updateDisplayedSimilarPages() {
+                    const pages = [];
+                    const maxDisplayed = 5;
+                    
+                    if (this.totalSimilarPages <= maxDisplayed) {
+                        // 如果总页数小于等于最大显示页数，显示所有页码
+                        for (let i = 1; i <= this.totalSimilarPages; i++) {
+                            pages.push(i);
+                        }
+                    } else {
+                        // 否则，显示当前页附近的页码
+                        let startPage = Math.max(1, this.currentSimilarPage - Math.floor(maxDisplayed / 2));
+                        let endPage = startPage + maxDisplayed - 1;
+                        
+                        if (endPage > this.totalSimilarPages) {
+                            endPage = this.totalSimilarPages;
+                            startPage = Math.max(1, endPage - maxDisplayed + 1);
+                        }
+                        
+                        for (let i = startPage; i <= endPage; i++) {
+                            pages.push(i);
+                        }
+                    }
+                    
+                    this.displayedSimilarPages = pages;
+                }
+            }
+        });
+    </script>
+    
+    <style>
+        .prediction-container {
+            margin-top: var(--spacing-lg);
+        }
+        
+        .prediction-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+        }
+        
+        /* 表单区域 */
+        .prediction-form-section {
+            height: fit-content;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .card-header h2 {
+            margin: 0;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .form-status {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            color: var(--primary-color);
+            font-size: 14px;
+        }
+        
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(59, 130, 246, 0.2);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+        
+        /* 预测结果区域 */
+        .prediction-results {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+        
+        .prediction-result-card {
+            padding-bottom: var(--spacing-lg);
+        }
+        
+        .predicted-price {
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .price-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .price-range {
+            color: var(--text-light);
+            font-size: 14px;
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .confidence-container {
+            margin-top: var(--spacing-md);
+        }
+        
+        .confidence-label {
+            font-weight: 500;
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .confidence-bar {
+            height: 8px;
+            background-color: var(--border-color-light);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: var(--spacing-xs);
+        }
+        
+        .confidence-value {
+            height: 100%;
+            background-color: var(--primary-color);
+            border-radius: 4px;
+        }
+        
+        .factors-container {
+            border-top: 1px solid var(--border-color-light);
+            padding-top: var(--spacing-lg);
+        }
+        
+        .factors-container h3 {
+            margin-top: 0;
+            font-size: 16px;
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .factors-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .factors-list li {
+            display: grid;
+            grid-template-columns: 60px 1fr 50px;
+            gap: var(--spacing-md);
+            align-items: center;
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .factor-name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .factor-bar-container {
+            height: 6px;
+            background-color: var(--border-color-light);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .factor-bar {
+            height: 100%;
+            background-color: var(--danger-color);
+            border-radius: 3px;
+        }
+        
+        .factor-bar.positive {
+            background-color: var(--success-color);
+        }
+        
+        .factor-impact {
+            text-align: right;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--danger-color);
+        }
+        
+        .factor-impact.positive {
+            color: var(--success-color);
+        }
+        
+        /* 图表样式 */
+        .prediction-chart {
+            height: 280px;
+            width: 100%;
+        }
+        
+        /* 表格样式 */
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        .price-comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .price-comparison-table th,
+        .price-comparison-table td {
+            padding: var(--spacing-sm) var(--spacing-md);
+            text-align: left;
+            border-bottom: 1px solid var(--border-color-light);
+        }
+        
+        .price-comparison-table th {
+            font-weight: 500;
+            color: var(--text-color);
+            background-color: var(--background-color);
+        }
+        
+        .price-comparison-table tr.highlight {
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+        
+        .price-change {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .increased {
+            color: var(--success-color);
+        }
+        
+        .decreased {
+            color: var(--danger-color);
+        }
+        
+        .current-year {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        /* 同型号车辆信息样式 */
+        .similar-models-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color-light);
+            padding-bottom: var(--spacing-md);
+        }
+        
+        .stats-item {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stats-label {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .stats-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        
+        .similar-models-by-year,
+        .similar-models-list {
+            margin-top: var(--spacing-lg);
+            padding-top: var(--spacing-md);
+            border-top: 1px solid var(--border-color-light);
+        }
+        
+        .similar-models-by-year h3,
+        .similar-models-list h3 {
+            margin-top: 0;
+            font-size: 16px;
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .year-price-table {
+            overflow-x: auto;
+        }
+        
+        .year-price-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .year-price-table th,
+        .year-price-table td {
+            padding: var(--spacing-sm);
+            text-align: left;
+            border-bottom: 1px solid var(--border-color-light);
+        }
+        
+        .year-price-table th {
+            font-weight: 500;
+            color: var(--text-color);
+            background-color: var(--background-color);
+        }
+        
+        .similar-car-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+        
+        .similar-car-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            transition: var(--transition);
+        }
+        
+        .similar-car-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .similar-car-title {
+            font-weight: 600;
+            margin-bottom: var(--spacing-xs);
+        }
+        
+        .similar-car-price {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .similar-car-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-xs) var(--spacing-md);
+        }
+        
+        .similar-car-info-item {
+            font-size: 14px;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 992px) {
+            .prediction-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .similar-models-stats {
+                flex-direction: column;
+                gap: var(--spacing-md);
+            }
+            
+            .similar-car-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</body>
+</html> 

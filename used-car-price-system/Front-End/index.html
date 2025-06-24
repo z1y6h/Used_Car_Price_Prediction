@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二手车价格系统 - 登录</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- 引入Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <!-- 引入字体图标 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+</head>
+<body>
+    <div id="app" class="login-container">
+        <div class="card login-card">
+            <div class="login-header">
+                <div class="login-logo">
+                    <i class="bi bi-car-front"></i> 二手车价格系统
+                </div>
+                <h1 class="login-title">欢迎登录</h1>
+                <p class="login-subtitle">请选择您的身份并登录系统</p>
+            </div>
+            
+            <div class="role-selector">
+                <div 
+                    class="role-option" 
+                    :class="{ active: selectedRole === 'buyer' }"
+                    @click="selectRole('buyer')"
+                >
+                    <i class="bi bi-person role-icon"></i>
+                    <span class="role-name">买家</span>
+                </div>
+                <div 
+                    class="role-option" 
+                    :class="{ active: selectedRole === 'seller' }"
+                    @click="selectRole('seller')"
+                >
+                    <i class="bi bi-shop role-icon"></i>
+                    <span class="role-name">卖家</span>
+                </div>
+                <div 
+                    class="role-option" 
+                    :class="{ active: selectedRole === 'admin' }"
+                    @click="selectRole('admin')"
+                >
+                    <i class="bi bi-shield role-icon"></i>
+                    <span class="role-name">管理员</span>
+                </div>
+            </div>
+            
+            <form class="login-form" @submit.prevent="login">
+                <div class="form-group">
+                    <label for="username"><i class="bi bi-person"></i> 用户名</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        v-model="username" 
+                        placeholder="请输入用户名"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password"><i class="bi bi-lock"></i> 密码</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        v-model="password" 
+                        placeholder="请输入密码"
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="btn" style="width: 100%;">
+                    <i class="bi bi-box-arrow-in-right"></i> 登录
+                </button>
+            </form>
+            
+            <div class="test-accounts">
+                <div class="test-accounts-title">测试账号：</div>
+                <div class="account-item">
+                    <span>买家账号：</span>
+                    <span>zh / 123456</span>
+                </div>
+                <div class="account-item">
+                    <span>卖家账号：</span>
+                    <span>liu bei / 123456</span>
+                </div>
+                <div class="account-item">
+                    <span>管理员账号：</span>
+                    <span>admin / 123456</span>
+                </div>
+            </div>
+            
+            <div class="login-footer">
+                © 2025 二手车价格系统 | 版本 1.0
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/main.js"></script>
+    <script src="js/user-api.js"></script>
+</body>
+</html> 

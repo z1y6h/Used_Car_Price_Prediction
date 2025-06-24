@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二手车价格系统 - 车辆查询</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <!-- 引入Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <!-- 引入字体图标 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+</head>
+<body>
+    <div id="navbar">
+        <site-navbar></site-navbar>
+    </div>
+
+    <div id="app" class="content-container container">
+        <h1><i class="bi bi-search"></i> 车辆查询</h1>
+        
+        <div class="search-container">
+            <!-- 搜索筛选区域 -->
+            <section class="card search-filters">
+                <div class="card-header">
+                    <h2><i class="bi bi-funnel"></i> 搜索筛选</h2>
+                    <button class="btn-sm btn-outline" @click="toggleFilters">
+                        {{ showFilters ? '收起筛选' : '展开筛选' }} 
+                        <i :class="showFilters ? 'bi bi-chevron-up' : 'bi bi-chevron-down'"></i>
+                    </button>
+                </div>
+                
+                <!-- 快速搜索 -->
+                <div class="quick-search">
+                    <div class="search-input-group">
+                        <i class="bi bi-search search-icon"></i>
+                        <input 
+                            type="text" 
+                            v-model="searchQuery" 
+                            placeholder="输入关键词搜索（品牌、型号、年份等）" 
+                            @keyup.enter="searchCars"
+                        >
+                        <button class="btn" @click="searchCars">搜索</button>
+                    </div>
+                </div>
+                
+                <!-- 高级筛选 -->
+                <div class="advanced-filters" v-show="showFilters">
+                    <div class="filter-grid">
+                        <div class="filter-group">
+                            <label>品牌</label>
+                            <select v-model="filters.make" @change="loadModels">
+                                <option value="">全部品牌</option>
+                                <option v-for="brand in availableBrands" :key="brand" :value="brand">{{ brand }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>型号</label>
+                            <select v-model="filters.model">
+                                <option value="">全部型号</option>
+                                <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>车身类型</label>
+                            <select v-model="filters.body_type">
+                                <option value="">全部车身类型</option>
+                                <option v-for="type in availableBodyTypes" :key="type" :value="type">{{ type }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>价格区间</label>
+                            <div class="range-inputs">
+                                <input type="number" v-model.number="filters.priceMin" placeholder="最低价">
+                                <span class="range-separator">-</span>
+                                <input type="number" v-model.number="filters.priceMax" placeholder="最高价">
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>年份区间</label>
+                            <div class="range-inputs">
+                                <input type="number" v-model.number="filters.yearMin" placeholder="最早年份">
+                                <span class="range-separator">-</span>
+                                <input type="number" v-model.number="filters.yearMax" placeholder="最晚年份">
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>里程区间 (km)</label>
+                            <div class="range-inputs">
+                                <input type="number" v-model.number="filters.mileageMin" placeholder="最低里程">
+                                <span class="range-separator">-</span>
+                                <input type="number" v-model.number="filters.mileageMax" placeholder="最高里程">
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>变速箱</label>
+                            <select v-model="filters.transmission">
+                                <option value="">全部</option>
+                                <option v-for="trans in availableTransmissions" :key="trans" :value="trans">{{ trans }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>燃油类型</label>
+                            <select v-model="filters.fuel_type">
+                                <option value="">全部</option>
+                                <option v-for="fuel in availableFuelTypes" :key="fuel" :value="fuel">{{ fuel }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>所在地</label>
+                            <select v-model="filters.location">
+                                <option value="">全部地区</option>
+                                <option v-for="location in availableLocations" :key="location" :value="location">{{ location }}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label>颜色</label>
+                            <select v-model="filters.color">
+                                <option value="">全部颜色</option>
+                                <option v-for="color in availableColors" :key="color" :value="color">{{ color }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="filter-actions">
+                        <button class="btn-outline" @click="resetFilters">
+                            <i class="bi bi-arrow-counterclockwise"></i> 重置筛选
+                        </button>
+                        <button class="btn" @click="applyFilters">
+                            <i class="bi bi-check2"></i> 应用筛选
+                        </button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 搜索结果区域 -->
+            <section class="search-results">
+                <!-- 结果统计和排序 -->
+                <div class="results-header card">
+                    <div class="results-count">
+                        找到 <strong>{{ totalResults }}</strong> 条结果
+                    </div>
+                    <div class="results-sort">
+                        <label>排序：</label>
+                        <select v-model="sortBy" @change="sortResults">
+                            <option value="price_asc">价格从低到高</option>
+                            <option value="price_desc">价格从高到低</option>
+                            <option value="year_desc">年份从新到旧</option>
+                            <option value="year_asc">年份从旧到新</option>
+                            <option value="mileage_asc">里程从低到高</option>
+                            <option value="mileage_desc">里程从高到低</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- 搜索结果列表 -->
+                <div class="results-list" v-if="cars.length > 0">
+                    <div class="car-card card" v-for="car in paginatedCars" :key="car.id">
+                        <div class="car-info">
+                            <h3 class="car-title">{{ car.make }} {{ car.model }}</h3>
+                            <div class="car-meta">
+                                <span><i class="bi bi-calendar"></i> {{ car.year }}年</span>
+                                <span><i class="bi bi-speedometer2"></i> {{ car.mileage.toLocaleString() }}km</span>
+                                <span><i class="bi bi-gear"></i> {{ car.transmission }}</span>
+                                <span><i class="bi bi-fuel-pump"></i> {{ car.fuel_type }}</span>
+                                <span><i class="bi bi-circle-square"></i> {{ car.Cylinders }}气缸</span>
+                            </div>
+                            <div class="car-description">
+                                {{ car.description }}
+                            </div>
+                            <div class="car-location">
+                                <i class="bi bi-geo-alt"></i> {{ car.location }}
+                            </div>
+                        </div>
+                        <div class="car-price">
+                            <div class="price-value">¥{{ car.price.toLocaleString() }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 无结果提示 -->
+                <div class="no-results card" v-else>
+                    <i class="bi bi-search"></i>
+                    <p>没有找到符合条件的车辆</p>
+                    <button class="btn-outline" @click="resetFilters">清除筛选条件</button>
+                </div>
+                
+                <!-- 分页控件 -->
+                <div class="pagination" v-if="totalPages > 1">
+                    <button 
+                        class="pagination-btn" 
+                        :class="{disabled: currentPage === 1}"
+                        @click="changePage(currentPage - 1)" 
+                        :disabled="currentPage === 1"
+                    >
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    
+                    <button 
+                        v-for="page in displayedPages" 
+                        :key="page" 
+                        class="pagination-btn" 
+                        :class="{active: currentPage === page}"
+                        @click="changePage(page)"
+                    >
+                        {{ page }}
+                    </button>
+                    
+                    <button 
+                        class="pagination-btn" 
+                        :class="{disabled: currentPage === totalPages}"
+                        @click="changePage(currentPage + 1)" 
+                        :disabled="currentPage === totalPages"
+                    >
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </section>
+        </div>
+    </div>
+    
+    <script src="../js/main.js"></script>
+    <script src="../js/car-search.js"></script>
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                searchQuery: '',
+                showFilters: false,
+                filters: {
+                    make: '',
+                    model: '',
+                    body_type: '',
+                    priceMin: '',
+                    priceMax: '',
+                    yearMin: '',
+                    yearMax: '',
+                    mileageMin: '',
+                    mileageMax: '',
+                    transmission: '',
+                    fuel_type: '',
+                    location: '',
+                    color: ''
+                },
+                sortBy: 'price_asc',
+                currentPage: 1,
+                itemsPerPage: 10,
+                cars: [],
+                totalResults: 0,
+                totalPages: 0,
+                isLoading: false,
+                availableBrands: [],
+                availableModels: [],
+                availableBodyTypes: [],
+                availableTransmissions: [],
+                availableFuelTypes: [],
+                availableColors: [],
+                availableLocations: []
+            },
+            computed: {
+                paginatedCars() {
+                    return this.cars;
+                },
+                displayedPages() {
+                    const pages = [];
+                    const maxDisplayed = 5;
+                    
+                    if (this.totalPages <= maxDisplayed) {
+                        // 如果总页数小于等于最大显示页数，显示所有页码
+                        for (let i = 1; i <= this.totalPages; i++) {
+                            pages.push(i);
+                        }
+                    } else {
+                        // 否则，显示当前页附近的页码
+                        let startPage = Math.max(1, this.currentPage - Math.floor(maxDisplayed / 2));
+                        let endPage = startPage + maxDisplayed - 1;
+                        
+                        if (endPage > this.totalPages) {
+                            endPage = this.totalPages;
+                            startPage = Math.max(1, endPage - maxDisplayed + 1);
+                        }
+                        
+                        for (let i = startPage; i <= endPage; i++) {
+                            pages.push(i);
+                        }
+                    }
+                    
+                    return pages;
+                }
+            },
+            created() {
+                // 加载筛选选项
+                this.loadFilterOptions();
+                // 初始化加载真实数据
+                this.fetchCarsFromAPI();
+            },
+            methods: {
+                loadModels() {
+                    // 当品牌选择改变时，加载对应品牌的车型列表
+                    if (!this.filters.make) {
+                        this.availableModels = [];
+                        this.filters.model = '';
+                        return;
+                    }
+                    
+                    CarAPI.getFilterOptions()
+                        .then(data => {
+                            // 找到与当前品牌匹配的车型
+                            const makeModels = data.models ? data.models.filter(item => 
+                                item.Make === this.filters.make).map(item => item.Model) : [];
+                            this.availableModels = makeModels;
+                            
+                            // 如果没有可用的车型，清空当前选择
+                            if (this.availableModels.length === 0) {
+                                this.filters.model = '';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('加载车型失败:', error);
+                            this.availableModels = [];
+                        });
+                },
+                toggleFilters() {
+                    this.showFilters = !this.showFilters;
+                },
+                searchCars() {
+                    // 使用关键词搜索
+                    this.currentPage = 1;
+                    this.fetchCarsFromAPI();
+                },
+                fetchCarsFromAPI() {
+                    this.isLoading = true;
+                    
+                    // 准备API参数
+                    const apiParams = {
+                        page: this.currentPage,
+                        limit: this.itemsPerPage
+                    };
+                    
+                    // 添加搜索查询
+                    if (this.searchQuery.trim() !== '') {
+                        apiParams.make = this.searchQuery;
+                    }
+                    
+                    // 添加筛选条件
+                    if (this.filters.make) {
+                        apiParams.make = this.filters.make;
+                    }
+                    
+                    if (this.filters.model) {
+                        apiParams.model = this.filters.model;
+                    }
+                    
+                    if (this.filters.body_type) {
+                        apiParams.body_type = this.filters.body_type;
+                    }
+                    
+                    if (this.filters.priceMin) {
+                        apiParams.price_min = this.filters.priceMin;
+                    }
+                    
+                    if (this.filters.priceMax) {
+                        apiParams.price_max = this.filters.priceMax;
+                    }
+                    
+                    if (this.filters.yearMin) {
+                        apiParams.year_min = this.filters.yearMin;
+                    }
+                    
+                    if (this.filters.yearMax) {
+                        apiParams.year_max = this.filters.yearMax;
+                    }
+                    
+                    if (this.filters.mileageMin) {
+                        apiParams.mileage_min = this.filters.mileageMin;
+                    }
+                    
+                    if (this.filters.mileageMax) {
+                        apiParams.mileage_max = this.filters.mileageMax;
+                    }
+                    
+                    if (this.filters.transmission) {
+                        apiParams.transmission = this.filters.transmission;
+                    }
+                    
+                    if (this.filters.fuel_type) {
+                        apiParams.fuel_type = this.filters.fuel_type;
+                    }
+                    
+                    if (this.filters.location) {
+                        apiParams.location = this.filters.location;
+                    }
+                    
+                    if (this.filters.color) {
+                        apiParams.color = this.filters.color;
+                    }
+                    
+                    // 调用API
+                    CarAPI.getCars(apiParams)
+                        .then(data => {
+                            // 处理API数据
+                            this.cars = data.cars.map(car => ({
+                                id: car.id,
+                                make: car.Make || '',
+                                model: car.Model || '',
+                                year: car.Year || 0,
+                                price: car.Price || 0,
+                                mileage: car.Mileage || 0,
+                                body_type: car.Body_Type || '',
+                                transmission: car.Transmission || '',
+                                fuel_type: car.Fuel_Type || '',
+                                color: car.Color || '',
+                                location: car.Location || '',
+                                description: car.Description || '',
+                                Cylinders: car.Cylinders || 4 // 添加气缸数字段，默认为4
+                            }));
+                            
+                            // 更新分页信息
+                            this.totalResults = data.total;
+                            this.totalPages = data.total_pages;
+                            this.currentPage = data.page;
+                            this.isLoading = false;
+                        })
+                        .catch(error => {
+                            console.error('API调用失败:', error);
+                            alert('获取车辆数据失败: ' + error.message);
+                            this.isLoading = false;
+                            this.cars = [];
+                            this.totalResults = 0;
+                            this.totalPages = 0;
+                        });
+                },
+                applyFilters() {
+                    this.currentPage = 1;
+                    this.fetchCarsFromAPI();
+                },
+                loadFilterOptions() {
+                    CarAPI.getFilterOptions()
+                        .then(data => {
+                            // 处理品牌
+                            this.availableBrands = data.makes.map(item => item.Make);
+                            
+                            // 处理车型
+                            this.availableBodyTypes = data.body_types.map(item => item.Body_Type);
+                            
+                            // 处理变速箱
+                            this.availableTransmissions = data.transmissions.map(item => item.Transmission);
+                            
+                            // 处理燃油类型
+                            this.availableFuelTypes = data.fuel_types.map(item => item.Fuel_Type);
+                            
+                            // 处理地点
+                            this.availableLocations = data.locations.map(item => item.Location);
+                            
+                            // 处理颜色
+                            this.availableColors = data.colors.map(item => item.Color);
+                        })
+                        .catch(error => {
+                            console.error('加载筛选选项失败:', error);
+                        });
+                },
+                
+                resetFilters() {
+                    // 重置所有筛选条件
+                    this.filters = {
+                        make: '',
+                        model: '',
+                        body_type: '',
+                        priceMin: '',
+                        priceMax: '',
+                        yearMin: '',
+                        yearMax: '',
+                        mileageMin: '',
+                        mileageMax: '',
+                        transmission: '',
+                        fuel_type: '',
+                        location: '',
+                        color: '' // 添加颜色筛选
+                    };
+                    this.searchQuery = '';
+                    this.currentPage = 1;
+                    
+                    // 清除表单中的选择
+                    const selects = document.querySelectorAll('select');
+                    selects.forEach(select => {
+                        select.value = '';
+                    });
+                    
+                    // 清除输入框
+                    const inputs = document.querySelectorAll('input[type="number"]');
+                    inputs.forEach(input => {
+                        input.value = '';
+                    });
+                    
+                    // 重置车型列表
+                    this.availableModels = [];
+                    
+                    this.fetchCarsFromAPI();
+                },
+                sortResults() {
+                    // 暂时在前端排序，后续可以改为API排序
+                    switch (this.sortBy) {
+                        case 'price_asc':
+                            this.cars.sort((a, b) => a.price - b.price);
+                            break;
+                        case 'price_desc':
+                            this.cars.sort((a, b) => b.price - a.price);
+                            break;
+                        case 'year_desc':
+                            this.cars.sort((a, b) => b.year - a.year);
+                            break;
+                        case 'year_asc':
+                            this.cars.sort((a, b) => a.year - b.year);
+                            break;
+                        case 'mileage_asc':
+                            this.cars.sort((a, b) => a.mileage - b.mileage);
+                            break;
+                        case 'mileage_desc':
+                            this.cars.sort((a, b) => b.mileage - a.mileage);
+                            break;
+                    }
+                },
+                changePage(page) {
+                    if (page >= 1 && page <= this.totalPages) {
+                        this.currentPage = page;
+                        this.fetchCarsFromAPI();
+                    }
+                }
+            }
+        });
+    </script>
+    
+    <style>
+        .search-container {
+            margin-top: var(--spacing-lg);
+        }
+        
+        /* 搜索筛选区域 */
+        .search-filters {
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .quick-search {
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .search-input-group {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: var(--spacing-md);
+            color: var(--text-light);
+        }
+        
+        .search-input-group input {
+            flex: 1;
+            padding-left: calc(var(--spacing-md) * 2 + 16px);
+            height: 48px;
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            border-right: none;
+        }
+        
+        .search-input-group .btn {
+            height: 48px;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            padding-left: var(--spacing-lg);
+            padding-right: var(--spacing-lg);
+        }
+        
+        .advanced-filters {
+            padding-top: var(--spacing-md);
+            border-top: 1px solid var(--border-color-light);
+        }
+        
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .filter-group label {
+            margin-bottom: var(--spacing-xs);
+            color: var(--text-color);
+            font-weight: 500;
+        }
+        
+        .range-inputs {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .range-separator {
+            color: var(--text-light);
+        }
+        
+        .filter-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+        }
+        
+        /* 搜索结果区域 */
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .results-count {
+            color: var(--text-color);
+        }
+        
+        .results-sort {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+        
+        .results-sort label {
+            margin-bottom: 0;
+            color: var(--text-light);
+        }
+        
+        .results-sort select {
+            width: auto;
+        }
+        
+        /* 车辆卡片 */
+        .car-card {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: var(--spacing-md);
+        }
+        
+        .car-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .car-title {
+            font-size: 18px;
+            margin-top: 0;
+            margin-bottom: var(--spacing-sm);
+        }
+        
+        .car-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        
+        .car-meta span {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .car-description {
+            flex: 1;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .car-location {
+            color: var(--text-light);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .car-price {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: space-between;
+        }
+        
+        .price-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        /* 无结果提示 */
+        .no-results {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--text-light);
+        }
+        
+        .no-results i {
+            font-size: 48px;
+            margin-bottom: var(--spacing-md);
+            opacity: 0.5;
+        }
+        
+        .no-results p {
+            margin-bottom: var(--spacing-md);
+            font-size: 18px;
+        }
+        
+        /* 分页控件 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-xs);
+            margin-top: var(--spacing-lg);
+        }
+        
+        .pagination-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .pagination-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .pagination-btn.active {
+            background-color: var(--primary-color);
+            color: var(--white);
+            border-color: var(--primary-color);
+        }
+        
+        .pagination-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 992px) {
+            .car-card {
+                grid-template-columns: 1fr;
+            }
+            
+            .car-info {
+                margin-top: var(--spacing-md);
+            }
+            
+            .car-price {
+                flex-direction: row;
+                align-items: center;
+                margin-top: var(--spacing-md);
+            }
+            
+            .price-value {
+                margin-bottom: 0;
+            }
+        }
+    </style>
+</body>
+</html> 
