@@ -1,3 +1,4 @@
+# coding: utf-8
 from flask import Flask, request, jsonify, redirect, send_from_directory
 from flask_cors import CORS
 import mysql.connector
@@ -8,7 +9,7 @@ import visualization
 from joblib import load
 import numpy as np
 
-# coding: utf-8
+
 # 获取前端目录
 FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../Front-End'))
 
