@@ -1969,4 +1969,37 @@ a:hover {
 /* 搜索页面样式 */
 .search-container {
     margin-top: 20px;
+}
+
+/* 注册链接样式 */
+.register-link {
+    margin-top: var(--spacing-md);
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.register-link a {
+    color: var(--primary-color);
+    font-weight: 500;
+    text-decoration: underline;
+    transition: var(--transition);
+}
+
+.register-link a:hover {
+    color: var(--secondary-color);
+}
+
+/* 注册表单中的角色选择器样式调整 */
+.form-group .role-selector {
+    margin: var(--spacing-xs) 0;
+    padding: 0;
+}
+
+/* 过渡动画 */
+.fade-enter-active, .fade-leave-active {
+    transition: opacity 0.3s;
+}
+.fade-enter, .fade-leave-to {
+    opacity: 0;
 } 

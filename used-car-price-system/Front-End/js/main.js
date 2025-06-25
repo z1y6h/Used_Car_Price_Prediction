@@ -7,12 +7,34 @@ if (document.querySelector('#app') && window.location.pathname.endsWith('index.h
             password: '',
             selectedRole: 'buyer', // 默认选择买家角色
             isLoading: false,
-            errorMessage: ''
+            errorMessage: '',
+            showLogin: true, // 控制显示登录还是注册页面
+            
+            // 注册表单数据
+            regUsername: '',
+            regPassword: '',
+            regConfirmPassword: '',
+            regRole: 'buyer' // 默认注册为买家
         },
         methods: {
             selectRole(role) {
                 this.selectedRole = role;
                 console.log(`选择角色: ${role}`);
+            },
+            toggleForm() {
+                // 切换登录/注册表单
+                this.showLogin = !this.showLogin;
+                
+                // 重置表单
+                if (this.showLogin) {
+                    this.username = '';
+                    this.password = '';
+                } else {
+                    this.regUsername = '';
+                    this.regPassword = '';
+                    this.regConfirmPassword = '';
+                    this.regRole = 'buyer';
+                }
             },
             async login() {
                 // 使用后端API进行登录验证
@@ -70,6 +92,49 @@ if (document.querySelector('#app') && window.location.pathname.endsWith('index.h
                 } catch (error) {
                     console.error('登录失败:', error);
                     alert('登录失败: ' + error.message);
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            
+            async register() {
+                // 表单验证
+                if (!this.regUsername || !this.regPassword || !this.regConfirmPassword) {
+                    alert('请填写完整的注册信息');
+                    return;
+                }
+                
+                if (this.regPassword !== this.regConfirmPassword) {
+                    alert('两次输入的密码不一致');
+                    return;
+                }
+                
+                this.isLoading = true;
+                
+                try {
+                    console.log(`开始注册处理，用户名: ${this.regUsername}, 角色: ${this.regRole}`);
+                    
+                    // 调用注册API
+                    const userData = {
+                        name: this.regUsername,
+                        password: this.regPassword,
+                        role: this.regRole
+                    };
+                    
+                    // 调用用户创建API
+                    const result = await UserAPI.createUser(userData);
+                    
+                    console.log('注册成功:', result);
+                    alert('注册成功！请登录');
+                    
+                    // 切换到登录页面，并预填用户名
+                    this.showLogin = true;
+                    this.username = this.regUsername;
+                    this.password = '';
+                    this.selectedRole = this.regRole;
+                } catch (error) {
+                    console.error('注册失败:', error);
+                    alert('注册失败: ' + error.message);
                 } finally {
                     this.isLoading = false;
                 }
