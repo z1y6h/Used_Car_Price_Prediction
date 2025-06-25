@@ -8,7 +8,7 @@ import visualization
 from joblib import load
 import numpy as np
 
-# -*- coding: utf-8 -*-
+# coding: utf-8
 # 获取前端目录
 FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../Front-End'))
 
