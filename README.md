@@ -2,6 +2,15 @@
 
 这是二手车价格系统的后端API服务，基于Flask开发，提供车辆信息查询、用户管理和价格预测等功能。
 
+## 功能展示
+![img_5.png](img_5.png)
+![img.png](img.png)
+![img_1.png](img_1.png)
+![img_2.png](img_2.png)
+![img_4.png](img_4.png)
+![img_3.png](img_3.png)
+
+
 ## 功能模块
 
 
