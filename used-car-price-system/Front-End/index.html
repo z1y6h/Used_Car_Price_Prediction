@@ -23,61 +23,61 @@
             
             <!-- 登录页面 -->
             <div v-if="showLogin">
-                <div class="role-selector">
-                    <div 
-                        class="role-option" 
-                        :class="{ active: selectedRole === 'buyer' }"
-                        @click="selectRole('buyer')"
+            <div class="role-selector">
+                <div 
+                    class="role-option" 
+                    :class="{ active: selectedRole === 'buyer' }"
+                    @click="selectRole('buyer')"
+                >
+                    <i class="bi bi-person role-icon"></i>
+                    <span class="role-name">买家</span>
+                </div>
+                <div 
+                    class="role-option" 
+                    :class="{ active: selectedRole === 'seller' }"
+                    @click="selectRole('seller')"
+                >
+                    <i class="bi bi-shop role-icon"></i>
+                    <span class="role-name">卖家</span>
+                </div>
+                <div 
+                    class="role-option" 
+                    :class="{ active: selectedRole === 'admin' }"
+                    @click="selectRole('admin')"
+                >
+                    <i class="bi bi-shield role-icon"></i>
+                    <span class="role-name">管理员</span>
+                </div>
+            </div>
+            
+            <form class="login-form" @submit.prevent="login">
+                <div class="form-group">
+                    <label for="username"><i class="bi bi-person"></i> 用户名</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        v-model="username" 
+                        placeholder="请输入用户名"
+                        required
                     >
-                        <i class="bi bi-person role-icon"></i>
-                        <span class="role-name">买家</span>
-                    </div>
-                    <div 
-                        class="role-option" 
-                        :class="{ active: selectedRole === 'seller' }"
-                        @click="selectRole('seller')"
-                    >
-                        <i class="bi bi-shop role-icon"></i>
-                        <span class="role-name">卖家</span>
-                    </div>
-                    <div 
-                        class="role-option" 
-                        :class="{ active: selectedRole === 'admin' }"
-                        @click="selectRole('admin')"
-                    >
-                        <i class="bi bi-shield role-icon"></i>
-                        <span class="role-name">管理员</span>
-                    </div>
                 </div>
                 
-                <form class="login-form" @submit.prevent="login">
-                    <div class="form-group">
-                        <label for="username"><i class="bi bi-person"></i> 用户名</label>
-                        <input 
-                            type="text" 
-                            id="username" 
-                            v-model="username" 
-                            placeholder="请输入用户名"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="password"><i class="bi bi-lock"></i> 密码</label>
-                        <input 
-                            type="password" 
-                            id="password" 
-                            v-model="password" 
-                            placeholder="请输入密码"
-                            required
-                        >
-                    </div>
-                    
-                    <button type="submit" class="btn" style="width: 100%;">
-                        <i class="bi bi-box-arrow-in-right"></i> 登录
-                    </button>
-                </form>
+                <div class="form-group">
+                    <label for="password"><i class="bi bi-lock"></i> 密码</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        v-model="password" 
+                        placeholder="请输入密码"
+                        required
+                    >
+                </div>
                 
+                <button type="submit" class="btn" style="width: 100%;">
+                    <i class="bi bi-box-arrow-in-right"></i> 登录
+                </button>
+            </form>
+            
                 <div class="register-link">
                     <p>还没有账号？<a href="#" @click.prevent="toggleForm">立即注册</a></p>
                 </div>
